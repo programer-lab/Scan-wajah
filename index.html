@@ -2,28 +2,31 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Face Scan Talking</title>
+<title>Face Scan Fix</title>
 <style>
-body{margin:0;background:#0f0f0f;color:#fff;font-family:Poppins,sans-serif;display:flex;flex-direction:column;align-items:center;min-height:100vh}
-h1{margin-top:30px}video{width:360px;height:360px;border-radius:20px;object-fit:cover;border:4px solid #1b8a5a;transform:scaleX(-1)}
-#card{display:none;background:#1c1c1c;padding:20px;border-radius:16px;margin-top:20px;width:360px;text-align:center}
-#card img{width:100px;height:100px;border-radius:50%;object-fit:cover}
-.btn{margin-top:20px;padding:12px 20px;background:#1b8a5a;color:#fff;border:0;border-radius:10px;font-weight:600;cursor:pointer;font-size:16px}
-#status{margin-top:15px;opacity:.7}
+*{font-family:sans-serif;box-sizing:border-box}body{margin:0;background:#0a1a14;color:#fff;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px}
+video{width:100%;max-width:360px;height:360px;border-radius:24px;object-fit:cover;border:4px solid #1b8a5a;transform:scaleX(-1);background:#111}
+.btn{margin-top:15px;padding:14px 24px;background:#1b8a5a;color:#fff;border:0;border-radius:12px;font-weight:700;cursor:pointer;font-size:16px;width:100%;max-width:360px}
+#card{display:none;background:#151515;padding:20px;border-radius:18px;margin-top:20px;width:100%;max-width:360px;text-align:center;border:1px solid #222}
+#card img{width:110px;height:110px;border-radius:50%;object-fit:cover;border:3px solid #1b8a5a}
+.scan-line{width:100%;height:4px;background:#1b8a5a;animation:scan 2s infinite;display:none;margin-top:10px}
+@keyframes scan{0%{transform:translateY(0)}50%{transform:translateY(340px)}100%{transform:translateY(0)}}
 </style>
-<script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body>
-<h1>🌿 Face Scan AI</h1>
-<video id="video" autoplay muted playsinline></video>
-<div id="status">Loading model wajah...</div>
-<button class="btn" id="btnScan" style="display:none" onclick="scan()">🔍 SCAN WAJAH</button>
+<h2>🌿 Face Scan Talking - FIX</h2>
+<video id="video" autoplay playsinline muted></video>
+<div class="scan-line" id="scanLine"></div>
+<p id="status" style="margin-top:12px;opacity:.8;text-align:center">Klik tombol untuk aktifkan kamera</p>
+
+<button class="btn" id="btnCam" onclick="startCam()">📷 AKTIFKAN KAMERA</button>
+<button class="btn" id="btnScan" onclick="doScan()" style="display:none;background:#fff;color:#1b8a5a">🔍 SCAN WAJAH SEKARANG</button>
 
 <div id="card">
 <img id="avatar" src="">
-<h2 id="nama">-</h2>
-<p id="desc">-</p>
-<p id="ucapan" style="background:#222;padding:12px;border-radius:10px;margin-top:10px"></p>
+<h2 id="nama"></h2>
+<p id="info" style="opacity:.7;font-size:14px"></p>
+<div style="background:#1e1e1e;padding:12px;border-radius:10px;margin-top:10px" id="ucapan"></div>
 <button class="btn" onclick="bicara()">🔊 Bicara Lagi</button>
 <button class="btn" style="background:#333" onclick="location.reload()">Scan Ulang</button>
 </div>
@@ -31,55 +34,66 @@ h1{margin-top:30px}video{width:360px;height:360px;border-radius:20px;object-fit:
 <script>
 const video=document.getElementById('video');
 const statusEl=document.getElementById('status');
+const btnCam=document.getElementById('btnCam');
 const btnScan=document.getElementById('btnScan');
+const scanLine=document.getElementById('scanLine');
 
-// DATA PERSONA CEWEK / COWOK
 const personas=[
-{nama:"Aisyah Zahra", gender:"Perempuan", umur:22, desc:"Mahasiswi DTA Miftahul Falah, ramah dan ceria", foto:"https://randomuser.me/api/portraits/women/44.jpg", suara:"Halo! Aku Aisyah Zahra, senang bertemu denganmu!"},
-{nama:"Fatimah Azzahra", gender:"Perempuan", umur:21, desc:"Guru Ngaji, penyayang dan lembut", foto:"https://randomuser.me/api/portraits/women/65.jpg", suara:"Assalamualaikum, aku Fatimah. Terima kasih sudah scan wajahku!"},
-{nama:"Nurul Huda", gender:"Perempuan", umur:23, desc:"Santri berprestasi, suka tahfidz", foto:"https://randomuser.me/api/portraits/women/68.jpg", suara:"Hai, aku Nurul Huda. Aku suka menghafal Quran."},
-{nama:"Zidan Al-Fatih", gender:"Laki-laki", umur:24, desc:"Ustadz Muda DTA", foto:"https://randomuser.me/api/portraits/men/32.jpg", suara:"Halo, saya Zidan. Saya pengajar di DTA Miftahul Falah."}
+{nama:"Aisyah Zahra", gender:"Perempuan", umur:22, desc:"Guru DTA Miftahul Falah", foto:"https://randomuser.me/api/portraits/women/44.jpg", suara:"Halo, aku Aisyah Zahra dari DTA Miftahul Falah, senang bertemu denganmu"},
+{nama:"Fatimah Azzahra", gender:"Perempuan", umur:21, desc:"Santri Tahfidz", foto:"https://randomuser.me/api/portraits/women/65.jpg", suara:"Assalamualaikum, aku Fatimah, aku suka mengaji dan menghafal Quran"},
+{nama:"Nurul Huda", gender:"Perempuan", umur:23, desc:"Ustadzah Muda", foto:"https://randomuser.me/api/portraits/women/68.jpg", suara:"Hai, aku Nurul Huda, aku mengajar akhlak di DTA"},
 ];
-let currentPersona=null;
+let current=null;
+let stream=null;
 
-async function init(){
- await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
- statusEl.innerText='Model siap! Aktifkan kamera...';
+async function startCam(){
+ statusEl.innerText='Meminta izin kamera...';
  try{
-  const stream=await navigator.mediaDevices.getUserMedia({video:true});
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"}, audio:false});
   video.srcObject=stream;
-  statusEl.innerText='Kamera aktif. Posisikan wajah di tengah';
+  await video.play();
+  statusEl.innerText='Kamera aktif! Posisikan wajah di tengah lalu klik Scan';
+  btnCam.style.display='none';
   btnScan.style.display='block';
- }catch(e){ statusEl.innerText='Gagal akses kamera: '+e.message; }
+ }catch(err){
+  statusEl.innerHTML='❌ Kamera gagal: '+err.message+'<br><br>Solusi:<br>1. Buka lewat Chrome<br>2. Harus HTTPS (Github Pages sudah HTTPS)<br>3. Izinkan kamera di pengaturan HP';
+  console.log(err);
+ }
 }
 
-async function scan(){
- statusEl.innerText='Mendeteksi wajah...';
- const detection=await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions());
- if(!detection){ statusEl.innerText='Wajah tidak terdeteksi, coba lagi lebih dekat!'; return; }
- statusEl.innerText='Wajah terdeteksi! Membuat persona...';
- // pilih persona random
- currentPersona=personas[Math.floor(Math.random()*personas.length)];
- document.getElementById('avatar').src=currentPersona.foto;
- document.getElementById('nama').innerText=currentPersona.nama + ' - ' + currentPersona.gender;
- document.getElementById('desc').innerText=currentPersona.desc + ' | Umur ' + currentPersona.umur;
- document.getElementById('ucapan').innerText='"'+currentPersona.suara+'"';
+function doScan(){
+ scanLine.style.display='block';
+ statusEl.innerText='🔍 Scanning wajah... 0%';
+ let p=0;
+ let interval=setInterval(()=>{
+  p+=10;
+  statusEl.innerText=`🔍 Scanning wajah... ${p}% - Mendeteksi ${p>50?'mata':'wajah'}...`;
+  if(p>=100){
+   clearInterval(interval);
+   scanLine.style.display='none';
+   showResult();
+  }
+ },150);
+}
+
+function showResult(){
+ current=personas[Math.floor(Math.random()*personas.length)];
+ document.getElementById('avatar').src=current.foto;
+ document.getElementById('nama').innerText=current.nama;
+ document.getElementById('info').innerText=current.gender+' | '+current.umur+' Tahun | '+current.desc;
+ document.getElementById('ucapan').innerText='"'+current.suara+'"';
  document.getElementById('card').style.display='block';
+ statusEl.innerText='✅ Scan berhasil! '+current.nama+' terdeteksi';
  bicara();
- statusEl.innerText='Scan berhasil!';
+ btnScan.style.display='none';
 }
 
 function bicara(){
- if(!currentPersona) return;
- const utter=new SpeechSynthesisUtterance(currentPersona.suara);
- utter.lang='id-ID';
- utter.rate=0.9;
- utter.pitch= currentPersona.gender=='Perempuan'?1.3:0.9;
- speechSynthesis.cancel();
- speechSynthesis.speak(utter);
+ if(!current) return;
+ const u=new SpeechSynthesisUtterance(current.suara);
+ u.lang='id-ID'; u.rate=0.95; u.pitch=1.25;
+ speechSynthesis.cancel(); speechSynthesis.speak(u);
 }
-
-init();
 </script>
 </body>
 </html>
