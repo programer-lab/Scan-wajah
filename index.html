@@ -2,98 +2,136 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Face Scan Fix</title>
+<title>Face Recognition Nama</title>
 <style>
-*{font-family:sans-serif;box-sizing:border-box}body{margin:0;background:#0a1a14;color:#fff;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px}
-video{width:100%;max-width:360px;height:360px;border-radius:24px;object-fit:cover;border:4px solid #1b8a5a;transform:scaleX(-1);background:#111}
-.btn{margin-top:15px;padding:14px 24px;background:#1b8a5a;color:#fff;border:0;border-radius:12px;font-weight:700;cursor:pointer;font-size:16px;width:100%;max-width:360px}
-#card{display:none;background:#151515;padding:20px;border-radius:18px;margin-top:20px;width:100%;max-width:360px;text-align:center;border:1px solid #222}
-#card img{width:110px;height:110px;border-radius:50%;object-fit:cover;border:3px solid #1b8a5a}
-.scan-line{width:100%;height:4px;background:#1b8a5a;animation:scan 2s infinite;display:none;margin-top:10px}
-@keyframes scan{0%{transform:translateY(0)}50%{transform:translateY(340px)}100%{transform:translateY(0)}}
+*{font-family:sans-serif;box-sizing:border-box}body{margin:0;background:#0a1a14;color:#fff;display:flex;flex-direction:column;align-items:center;padding:16px}
+video,canvas{width:100%;max-width:360px;height:360px;border-radius:24px;object-fit:cover;border:4px solid #1b8a5a;transform:scaleX(-1);background:#111}
+input{width:100%;max-width:360px;padding:12px;border-radius:10px;border:1px solid #333;background:#111;color:#fff;margin-top:8px}
+.btn{margin-top:10px;padding:12px;width:100%;max-width:360px;border-radius:10px;border:0;font-weight:700;cursor:pointer}
+.btn-hijau{background:#1b8a5a;color:#fff}.btn-putih{background:#fff;color:#1b8a5a}
+.card{background:#151515;padding:14px;border-radius:14px;width:100%;max-width:360px;margin-top:12px;border:1px solid #222}
+.list img{width:40px;height:40px;border-radius:50%;object-fit:cover}
+#status{margin:10px 0;text-align:center;opacity:.8;font-size:14px}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 </head>
 <body>
-<h2>🌿 Face Scan Talking - FIX</h2>
+<h3>🌿 Face Recognition - Kenal Nama</h3>
+<p style="font-size:12px;opacity:.6">1. Daftarkan wajah dulu, 2. Baru scan untuk kenali</p>
+
 <video id="video" autoplay playsinline muted></video>
-<div class="scan-line" id="scanLine"></div>
-<p id="status" style="margin-top:12px;opacity:.8;text-align:center">Klik tombol untuk aktifkan kamera</p>
+<p id="status">Loading AI...</p>
 
-<button class="btn" id="btnCam" onclick="startCam()">📷 AKTIFKAN KAMERA</button>
-<button class="btn" id="btnScan" onclick="doScan()" style="display:none;background:#fff;color:#1b8a5a">🔍 SCAN WAJAH SEKARANG</button>
-
-<div id="card">
-<img id="avatar" src="">
-<h2 id="nama"></h2>
-<p id="info" style="opacity:.7;font-size:14px"></p>
-<div style="background:#1e1e1e;padding:12px;border-radius:10px;margin-top:10px" id="ucapan"></div>
-<button class="btn" onclick="bicara()">🔊 Bicara Lagi</button>
-<button class="btn" style="background:#333" onclick="location.reload()">Scan Ulang</button>
+<input id="namaInput" placeholder="Nama orangnya (contoh: Aisyah)">
+<div style="display:flex;gap:8px;width:100%;max-width:360px">
+<button class="btn btn-hijau" onclick="daftarWajah()">➕ DAFTARKAN WAJAH</button>
+<button class="btn btn-putih" onclick="kenaliWajah()">🔍 KENALI WAJAH</button>
 </div>
+
+<button class="btn" style="background:#333;color:#fff" onclick="startCam()">📷 AKTIFKAN KAMERA</button>
+
+<div id="hasil" class="card" style="display:none;text-align:center">
+<img id="hasilFoto" style="width:100px;height:100px;border-radius:50%">
+<h2 id="hasilNama"></h2>
+<p id="hasilUcapan" style="background:#1e1e1e;padding:10px;border-radius:8px"></p>
+<button class="btn btn-hijau" onclick="bicara()">🔊 Bicara</button>
+</div>
+
+<div class="card"><b>Daftar Wajah Tersimpan (<span id="jml">0</span>)</b><div id="listWajah" class="list"></div><button onclick="hapusSemua()" style="margin-top:10px;background:none;border:0;color:#ff6b6b;font-size:12px">Hapus Semua Data</button></div>
 
 <script>
 const video=document.getElementById('video');
 const statusEl=document.getElementById('status');
-const btnCam=document.getElementById('btnCam');
-const btnScan=document.getElementById('btnScan');
-const scanLine=document.getElementById('scanLine');
+let faceMatcher=null;
+let labeledDescriptors=[];
+let currentHasil=null;
 
-const personas=[
-{nama:"Aisyah Zahra", gender:"Perempuan", umur:22, desc:"Guru DTA Miftahul Falah", foto:"https://randomuser.me/api/portraits/women/44.jpg", suara:"Halo, aku Aisyah Zahra dari DTA Miftahul Falah, senang bertemu denganmu"},
-{nama:"Fatimah Azzahra", gender:"Perempuan", umur:21, desc:"Santri Tahfidz", foto:"https://randomuser.me/api/portraits/women/65.jpg", suara:"Assalamualaikum, aku Fatimah, aku suka mengaji dan menghafal Quran"},
-{nama:"Nurul Huda", gender:"Perempuan", umur:23, desc:"Ustadzah Muda", foto:"https://randomuser.me/api/portraits/women/68.jpg", suara:"Hai, aku Nurul Huda, aku mengajar akhlak di DTA"},
-];
-let current=null;
-let stream=null;
+async function init(){
+ statusEl.innerText='Loading model AI wajah (tunggu 10 detik)...';
+ try{
+  await Promise.all([
+   faceapi.nets.ssdMobilenetv1.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models'),
+   faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models'),
+   faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models')
+  ]);
+  statusEl.innerText='Model siap! Aktifkan kamera';
+  loadData();
+ }catch(e){ statusEl.innerText='Gagal load model, coba reload. Pastikan internet lancar'; }
+}
 
 async function startCam(){
- statusEl.innerText='Meminta izin kamera...';
  try{
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"}, audio:false});
-  video.srcObject=stream;
-  await video.play();
-  statusEl.innerText='Kamera aktif! Posisikan wajah di tengah lalu klik Scan';
-  btnCam.style.display='none';
-  btnScan.style.display='block';
- }catch(err){
-  statusEl.innerHTML='❌ Kamera gagal: '+err.message+'<br><br>Solusi:<br>1. Buka lewat Chrome<br>2. Harus HTTPS (Github Pages sudah HTTPS)<br>3. Izinkan kamera di pengaturan HP';
-  console.log(err);
+  const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"}});
+  video.srcObject=s; await video.play();
+  statusEl.innerText='Kamera aktif. Daftar / Kenali sekarang';
+ }catch(e){ statusEl.innerText='Gagal kamera: '+e.message; }
+}
+
+function loadData(){
+ const saved=JSON.parse(localStorage.getItem('wajahDB')||'[]');
+ labeledDescriptors=saved.map(item=> new faceapi.LabeledFaceDescriptors(item.label, [new Float32Array(item.descriptor)]));
+ if(labeledDescriptors.length) faceMatcher=new faceapi.FaceMatcher(labeledDescriptors, 0.5);
+ renderList();
+}
+
+function renderList(){
+ const saved=JSON.parse(localStorage.getItem('wajahDB')||'[]');
+ document.getElementById('jml').innerText=saved.length;
+ document.getElementById('listWajah').innerHTML=saved.map(s=>`<div style="display:flex;align-items:center;gap:8px;margin-top:8px"><img src="${s.foto}"><span>${s.label}</span></div>`).join('')||'<p style="font-size:12px;opacity:.5">Belum ada wajah terdaftar</p>';
+}
+
+async function daftarWajah(){
+ const nama=document.getElementById('namaInput').value.trim();
+ if(!nama) return alert('Isi nama dulu!');
+ statusEl.innerText='Mendeteksi wajah untuk didaftarkan...';
+ const detection=await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
+ if(!detection) return statusEl.innerText='❌ Wajah tidak terdeteksi, dekatkan muka ke kamera!';
+ // simpan foto
+ const canvas=document.createElement('canvas'); canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+ canvas.getContext('2d').drawImage(video,0,0);
+ const foto=canvas.toDataURL('image/jpeg');
+
+ const saved=JSON.parse(localStorage.getItem('wajahDB')||'[]');
+ saved.push({label:nama, descriptor:Array.from(detection.descriptor), foto:foto});
+ localStorage.setItem('wajahDB',JSON.stringify(saved));
+ loadData();
+ statusEl.innerText='✅ '+nama+' berhasil didaftarkan!';
+ document.getElementById('namaInput').value='';
+}
+
+async function kenaliWajah(){
+ if(!faceMatcher) return alert('Belum ada wajah terdaftar! Daftarkan dulu 1 orang');
+ statusEl.innerText='🔍 Mengenali wajah...';
+ const detection=await faceapi.detectSingleFace(video).withFaceLandmarks().withFaceDescriptor();
+ if(!detection) return statusEl.innerText='❌ Wajah tidak terdeteksi!';
+ const bestMatch=faceMatcher.findBestMatch(detection.descriptor);
+ const nama=bestMatch.label;
+ const jarak=bestMatch.distance;
+ if(bestMatch.label=='unknown' || jarak>0.5){
+  statusEl.innerText='❓ Wajah tidak dikenal (jarak '+jarak.toFixed(2)+')';
+  return;
  }
-}
-
-function doScan(){
- scanLine.style.display='block';
- statusEl.innerText='🔍 Scanning wajah... 0%';
- let p=0;
- let interval=setInterval(()=>{
-  p+=10;
-  statusEl.innerText=`🔍 Scanning wajah... ${p}% - Mendeteksi ${p>50?'mata':'wajah'}...`;
-  if(p>=100){
-   clearInterval(interval);
-   scanLine.style.display='none';
-   showResult();
-  }
- },150);
-}
-
-function showResult(){
- current=personas[Math.floor(Math.random()*personas.length)];
- document.getElementById('avatar').src=current.foto;
- document.getElementById('nama').innerText=current.nama;
- document.getElementById('info').innerText=current.gender+' | '+current.umur+' Tahun | '+current.desc;
- document.getElementById('ucapan').innerText='"'+current.suara+'"';
- document.getElementById('card').style.display='block';
- statusEl.innerText='✅ Scan berhasil! '+current.nama+' terdeteksi';
+ // tampilkan
+ const saved=JSON.parse(localStorage.getItem('wajahDB')||'[]');
+ const data=saved.find(s=>s.label==nama);
+ currentHasil={nama:nama, foto:data.foto, ucapan:`Halo, saya ${nama}, senang bertemu denganmu!`};
+ document.getElementById('hasilFoto').src=data.foto;
+ document.getElementById('hasilNama').innerText=nama+' (Akurasi '+( (1-jarak)*100).toFixed(0)+'% )';
+ document.getElementById('hasilUcapan').innerText=currentHasil.ucapan;
+ document.getElementById('hasil').style.display='block';
+ statusEl.innerText='✅ Dikenali: '+nama;
  bicara();
- btnScan.style.display='none';
 }
 
 function bicara(){
- if(!current) return;
- const u=new SpeechSynthesisUtterance(current.suara);
- u.lang='id-ID'; u.rate=0.95; u.pitch=1.25;
+ if(!currentHasil) return;
+ const u=new SpeechSynthesisUtterance(currentHasil.ucapan);
+ u.lang='id-ID'; u.rate=0.95; u.pitch=1.2;
  speechSynthesis.cancel(); speechSynthesis.speak(u);
 }
+function hapusSemua(){ if(confirm('Hapus semua data wajah?')){ localStorage.removeItem('wajahDB'); loadData(); statusEl.innerText='Data dihapus'; } }
+
+init();
 </script>
 </body>
 </html>
